@@ -1,0 +1,29 @@
+# Database
+sqlite3
+
+# Security
+bcrypt==4.0.1
+cryptography==41.0.3
+python-dotenv==1.0.0
+
+# Data handling
+dataclasses
+typing
+decimal
+datetime
+
+# Logging
+logging
+
+# Testing
+pytest==7.4.0
+pytest-cov==4.1.0
+
+# Development tools
+black==23.7.0
+flake8==6.1.0
+mypy==1.5.1
+
+# Optional but recommended
+python-decouple==3.8
+pydantic==2.1.1
