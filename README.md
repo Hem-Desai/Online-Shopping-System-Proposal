@@ -234,6 +234,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ---
 
 ## 📧 Contact
-Hem Desai - mohmmedh1@hotmail.com
-Project Link: https://github.com/yourusername/online-shopping-system
+Mohammed Harahsheh - mohmmedh1@hotmail.com
+
 
