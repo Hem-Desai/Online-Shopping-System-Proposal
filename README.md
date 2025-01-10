@@ -1,83 +1,97 @@
-# Online Shopping System
+Online Shopping System
 
 A robust e-commerce backend system built with Python, featuring secure user authentication, product management, order processing, and more.
 
-## 🌟 Features
+🌟 Features
 
-### Core Functionality
-- **User Management**
-  - Customer registration and authentication
-  - Role-based access control (Admin/Customer)
-  - Secure password hashing with bcrypt
+Core Functionality
 
-- **Product Management**
-  - Product CRUD operations
-  - Inventory tracking
-  - Product categorization
+User Management
 
-- **Order Processing**
-  - Shopping cart functionality
-  - Order creation and tracking
-  - Payment processing
-  - Delivery status updates
+Customer registration and authentication
 
-- **Security Features**
-  - Password hashing (bcrypt)
-  - Data encryption (Fernet)
-  - Secure key management
-  - Session handling
+Role-based access control (Admin/Customer)
 
-### Database Structure
-- Customers
-- Products
-- Orders
-- Order Items
-- Payments
-- Deliveries
+Secure password hashing with bcrypt
 
----
+Product Management
 
-## 🚀 Getting Started
+Product CRUD operations
 
-### Prerequisites
-```bash
+Inventory tracking
+
+Product categorization
+
+Order Processing
+
+Shopping cart functionality
+
+Order creation and tracking
+
+Payment processing
+
+Delivery status updates
+
+Security Features
+
+Password hashing (bcrypt)
+
+Data encryption (Fernet)
+
+Secure key management
+
+Session handling
+
+Database Structure
+
+Customers
+
+Products
+
+Orders
+
+Order Items
+
+Payments
+
+Deliveries
+
+🚀 Getting Started
+
+Prerequisites
+
 # Required Python version
 Python 3.8+
 
 # Required packages
 pip install -r requirements.txt
-```
 
-### Installation
-1. Clone the repository
-```bash
+Installation
+
+Clone the repository
+
 git clone https://github.com/yourusername/online-shopping-system.git
 cd online-shopping-system
-```
 
-2. Install dependencies
-```bash
+Install dependencies
+
 pip install -r requirements.txt
-```
 
-3. Initialize the database
-```bash
+Initialize the database
+
 python test_data.py
-```
 
-### Configuration
-Create a `.env` file in the root directory:
-```env
+Configuration
+
+Create a .env file in the root directory:
+
 DB_NAME=shop.db
 SECRET_KEY=your_secret_key
-```
 
-Ensure the `encryption_key.key` file is present in the root directory for secure data encryption. If not, it will be generated automatically during the first run.
+Ensure the encryption_key.key file is present in the root directory for secure data encryption. If not, it will be generated automatically during the first run.
 
----
+📁 Project Structure
 
-## 📁 Project Structure
-```
 online-shopping-system/
 ├── database.py         # Database connection and operations
 ├── models.py          # Data models and repositories
@@ -87,20 +101,21 @@ online-shopping-system/
 ├── requirements.txt   # Project dependencies
 ├── encryption_key.key # Encryption key for secure data
 └── shop.db            # SQLite database file
-```
 
----
+🔧 Core Components
 
-## 🔧 Core Components
+1. Database Connection (database.py)
 
-### 1. Database Connection (database.py)
-- SQLite database management
-- Connection pooling
-- Query execution
-- Error handling
+SQLite database management
 
-### 2. Data Models (models.py)
-```python
+Connection pooling
+
+Query execution
+
+Error handling
+
+2. Data Models (models.py)
+
 @dataclass
 class Customer:
     name: str
@@ -117,49 +132,80 @@ class Product:
     stock_quantity: int
     product_id: Optional[int] = None
     description: Optional[str] = None
-```
-### 3. Security Manager (security.py)
-- Password hashing with bcrypt
-- Data encryption with Fernet
-- Secure key management
-- Session handling
 
-### 4. Main System (main.py)
-- User registration and authentication
-- Product management
-- Order processing
-- System initialization
+3. Security Manager (security.py)
 
----
+Password hashing with bcrypt
 
-## 🔐 Security Features
+Data encryption with Fernet
 
-### Password Security
-- Bcrypt hashing with salt
-- Minimum password requirements
-- Failed login attempt handling
+Secure key management
 
-### Data Protection
-- AES encryption for sensitive data
-- Secure key storage
-- Session management
+Session handling
 
----
+4. Main System (main.py)
 
-## 📝 Usage Examples
+User registration and authentication
 
-### User Registration
-```python
+Product management
+
+Order processing
+
+System initialization
+
+🔐 Security Features
+
+Password Security
+
+Bcrypt hashing with salt
+
+Minimum password requirements
+
+Failed login attempt handling
+
+Data Protection
+
+AES encryption for sensitive data
+
+Secure key storage
+
+Session management
+
+🛠️ Object-Oriented Design Principles
+
+Encapsulation
+
+Each class (e.g., Customer, Product, Order, SecurityManager) encapsulates its functionality and attributes.
+
+Abstraction
+
+High-level logic is abstracted in main.py, while low-level database and security operations are handled in dedicated files (database.py, security.py).
+
+Modularity
+
+The project is divided into distinct modules, each handling a specific responsibility (e.g., database operations, security, business logic).
+
+Dependency Injection
+
+Classes like CustomerRepository and ProductRepository accept dependencies (e.g., DatabaseConnection, SecurityManager) via their constructors, enabling better testability and flexibility.
+
+Single Responsibility Principle
+
+Each class and file focuses on a single responsibility, adhering to clean coding practices.
+
+📝 Usage Examples
+
+User Registration
+
 shop = OnlineShoppingSystem()
 success = shop.register_user(
     name="John Doe",
     email="john@example.com",
     password="SecurePass123!"
 )
-```
 
-### Product Management
-```python
+Product Management
+
 # Add new product (admin only)
 success = shop.add_product(
     name="Laptop Pro X",
@@ -167,51 +213,47 @@ success = shop.add_product(
     quantity=10,
     description="High-performance laptop"
 )
-```
 
-### Order Processing
-```python
+Order Processing
+
 # Place order
 order = shop.place_order(
     customer_id=1,
     products=[(1, 2), (3, 1)]  # (product_id, quantity)
 )
-```
 
----
-
-## 🧪 Testing
+🧪 Testing
 
 Run the test data script to populate the database with sample data:
-```bash
+
 python test_data.py
-```
 
----
+🛠️ Future Enhancements
 
-## 🛠️ Future Enhancements
-1. Shopping Cart System
-2. Review & Rating System
-3. Notification Service
-4. Inventory Management
-5. Discount System
-6. API Integration
+Shopping Cart System
 
----
+Review & Rating System
 
-## 📄 License
+Notification Service
+
+Inventory Management
+
+Discount System
+
+API Integration
+
+📄 License
+
 This project is licensed under the MIT License - see the LICENSE file for details.
 
----
+👥 Contributing
 
-## 👥 Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+Fork the repository
 
----
+Create a feature branch
 
-## 📧 Contact
+Commit your changes
 
+Push to the branch
+
+Create a Pull Request
