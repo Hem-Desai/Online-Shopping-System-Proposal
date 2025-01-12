@@ -179,9 +179,19 @@ python test_data.py
 ## 📁 Project Structure
 ```
 online-shopping-system/
-├── main.py           # Main application logic and OnlineShoppingSystem class
-├── test_data.py      # Interactive menu system and test data
-└── requirements.txt   # Project dependencies
+├── main.py              # Main application logic and OnlineShoppingSystem class
+├── test_data.py         # Interactive menu system and test data
+├── security/
+│   ├── __init__.py
+│   ├── privacy.py       # DataPrivacyManager implementation
+│   ├── database.py      # SecureDatabase implementation
+│   ├── access.py        # DataAccessControl implementation
+│   └── operations.py    # SecureDataOperations implementation
+├── utils/
+│   ├── __init__.py
+│   └── logging.py       # Audit logging utilities
+├── encryption.key       # Encrypted key storage (generated on first run)
+└── requirements.txt     # Project dependencies
 ```
 
 ---
@@ -233,311 +243,212 @@ online-shopping-system/
 ## 📧 Contact
 Mohammed Harahsheh - mohmmedh1@hotmail.com
 
-### Security Implementation Examples
+### Database Security & Privacy Implementation
 
-#### 1. Enhanced Encryption System
+#### 1. Data Privacy Manager
+Handles encryption and secure storage of sensitive data using Fernet symmetric encryption.
+
 ```python
 from cryptography.fernet import Fernet
-from base64 import b64encode
+import base64
 import os
 
-class SecurityManager:
+class DataPrivacyManager:
     def __init__(self):
-        self.key = self._generate_key()
-        self.fernet = Fernet(self.key)
-        self.max_login_attempts = 3
-        self.lockout_time = 300  # 5 minutes
-
-    def _generate_key(self):
-        """Generate a secure encryption key"""
-        return Fernet.generate_key()
-
-    def encrypt_sensitive_data(self, data):
-        """Encrypt sensitive data using Fernet"""
-        if not isinstance(data, bytes):
-            data = str(data).encode()
-        return self.fernet.encrypt(data)
-
-    def decrypt_sensitive_data(self, encrypted_data):
-        """Decrypt Fernet-encrypted data"""
-        try:
-            return self.fernet.decrypt(encrypted_data)
-        except Exception as e:
-            logging.error(f"Decryption failed: {e}")
-            raise SecurityException("Failed to decrypt data")
+        self.encryption_key = self._load_or_generate_key()
+        self.fernet = Fernet(self.encryption_key)
+        
+    def _load_or_generate_key(self):
+        """Load existing key or generate new one"""
+        key_file = "encryption.key"
+        if os.path.exists(key_file):
+            with open(key_file, "rb") as f:
+                return f.read()
+        else:
+            key = Fernet.generate_key()
+            with open(key_file, "wb") as f:
+                f.write(key)
+            return key
+            
+    def encrypt_personal_data(self, data):
+        """Encrypt personal information"""
+        if isinstance(data, str):
+            return self.fernet.encrypt(data.encode()).decode()
+        return data
+        
+    def decrypt_personal_data(self, encrypted_data):
+        """Decrypt personal information"""
+        if isinstance(encrypted_data, str):
+            try:
+                return self.fernet.decrypt(encrypted_data.encode()).decode()
+            except:
+                return encrypted_data
+        return encrypted_data
 ```
 
-**Description:**
-The SecurityManager implements enterprise-grade encryption using Fernet symmetric encryption:
-- Uses AES-128 in CBC mode with PKCS7 padding
-- Generates cryptographically secure keys using `os.urandom()`
-- Handles automatic encoding/decoding of data
-- Includes comprehensive error handling and logging
+#### 2. Enhanced Database Security
+Provides thread-safe database connections with security features and audit logging.
 
-Key Features:
-- Automatic key management
-- Secure data transformation
-- Error recovery
-- Memory security
-
-Usage Example:
 ```python
-# Initialize security manager
-security = SecurityManager()
+import sqlite3
+from contextlib import contextmanager
+import threading
 
-# Encrypt sensitive data
-encrypted = security.encrypt_sensitive_data("sensitive_info")
-
-# Decrypt when needed
-decrypted = security.decrypt_sensitive_data(encrypted)
-```
-
-#### 2. Database Security Implementation
-```python
-class DatabaseManager:
-    def __init__(self):
-        self.connection = None
+class SecureDatabase:
+    def __init__(self, db_name):
+        self.db_name = db_name
+        self.connection_pool = {}
         self._setup_database()
-
+        
     def _setup_database(self):
-        """Setup secure database connection with proper PRAGMA settings"""
-        self.connection = sqlite3.connect('shop.db', timeout=30)
-        cursor = self.connection.cursor()
-        
-        # Enable foreign key constraints
-        cursor.execute("PRAGMA foreign_keys = ON")
-        
-        # Set secure delete
-        cursor.execute("PRAGMA secure_delete = ON")
-        
-        # Enable WAL mode for better concurrency
-        cursor.execute("PRAGMA journal_mode = WAL")
+        """Initialize database with security settings"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Enable security features
+            cursor.executescript("""
+                PRAGMA foreign_keys = ON;
+                PRAGMA secure_delete = ON;
+                PRAGMA journal_mode = WAL;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA temp_store = MEMORY;
+                PRAGMA mmap_size = 30000000000;
+            """)
+            
+            # Create audit log table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    user_id INTEGER,
+                    action TEXT,
+                    table_name TEXT,
+                    record_id INTEGER,
+                    old_value TEXT,
+                    new_value TEXT
+                )
+            """)
 
-    def create_connection(self):
-        """Create a new database connection with timeout"""
+    @contextmanager
+    def get_connection(self):
+        """Get thread-safe database connection"""
+        thread_id = threading.get_ident()
+        if thread_id not in self.connection_pool:
+            self.connection_pool[thread_id] = sqlite3.connect(
+                self.db_name,
+                timeout=30,
+                isolation_level='EXCLUSIVE'
+            )
         try:
-            return sqlite3.connect('shop.db', timeout=30)
-        except Exception as e:
-            logging.error(f"Database connection failed: {e}")
-            raise DatabaseException("Failed to establish database connection")
+            yield self.connection_pool[thread_id]
+        finally:
+            if thread_id in self.connection_pool:
+                self.connection_pool[thread_id].close()
+                del self.connection_pool[thread_id]
 ```
 
-**Description:**
-The DatabaseManager ensures secure database operations through:
-- Connection timeouts to prevent DOS attacks
-- Foreign key constraints for data integrity
-- Secure delete operations
-- Write-Ahead Logging for safe concurrent access
+#### 3. Data Access Control
+Implements role-based access control for database operations.
 
-Implementation Features:
-- 30-second connection timeout
-- Automatic connection recovery
-- Transaction safety
-- Resource cleanup
-
-Usage Example:
 ```python
-# Initialize database manager
-db = DatabaseManager()
+from enum import Enum
+from functools import wraps
 
-# Create new connection
-connection = db.create_connection()
+class AccessLevel(Enum):
+    READ = 1
+    WRITE = 2
+    ADMIN = 3
+
+class DataAccessControl:
+    def __init__(self, db):
+        self.db = db
+        self.user_permissions = {}
+
+    def require_permission(self, required_level):
+        """Decorator to check permission level"""
+        def decorator(f):
+            @wraps(f)
+            def wrapped(self, user_id, *args, **kwargs):
+                if not self._check_permission(user_id, required_level):
+                    raise PermissionError(f"User {user_id} lacks {required_level} permission")
+                return f(self, user_id, *args, **kwargs)
+            return wrapped
+        return decorator
+
+    def _check_permission(self, user_id, required_level):
+        """Check if user has required permission level"""
+        user_level = self.user_permissions.get(user_id, AccessLevel.READ)
+        return user_level.value >= required_level.value
 ```
 
-#### 3. SQL Injection Protection
+#### 4. Secure Data Operations
+Manages secure data operations with automatic encryption.
+
 ```python
-class QueryManager:
-    def __init__(self, db_connection):
-        self.connection = db_connection
-
-    def execute_safe_query(self, query, params=None):
-        """Execute parameterized queries to prevent SQL injection"""
-        cursor = self.connection.cursor()
-        try:
-            if params:
-                cursor.execute(query, params)
-            else:
-                cursor.execute(query)
-            self.connection.commit()
-            return cursor
-        except sqlite3.Error as e:
-            self.connection.rollback()
-            logging.error(f"Query execution failed: {e}")
-            raise DatabaseException("Query execution failed")
-
-    def select_user(self, username):
-        """Example of safe user selection"""
-        query = "SELECT * FROM users WHERE username = ?"
-        return self.execute_safe_query(query, (username,))
-```
-
-**Description:**
-The QueryManager prevents SQL injection through:
-- Parameterized queries
-- Input validation
-- Transaction management
-- Error handling
-
-Security Measures:
-- No string concatenation
-- Parameter sanitization
-- Transaction rollback on errors
-- Query logging
-
-Usage Example:
-```python
-# Initialize query manager
-query_mgr = QueryManager(db_connection)
-
-# Execute safe query
-result = query_mgr.select_user("john_doe")
-```
-
-#### 4. User Authentication and Session Management
-```python
-class AuthenticationManager:
-    def __init__(self):
-        self.security = SecurityManager()
-        self.failed_attempts = {}
-        self.sessions = {}
-
-    def authenticate_user(self, username, password):
-        """Secure user authentication with rate limiting"""
-        if self._is_account_locked(username):
-            raise SecurityException("Account is temporarily locked")
-
-        user = self.get_user(username)
-        if not user:
-            self._record_failed_attempt(username)
-            raise AuthenticationException("Invalid credentials")
-
-        if not self._verify_password(password, user['password_hash']):
-            self._record_failed_attempt(username)
-            raise AuthenticationException("Invalid credentials")
-
-        self._clear_failed_attempts(username)
-        return self._create_session(user)
-
-    def _is_account_locked(self, username):
-        """Check if account is locked due to too many failed attempts"""
-        if username in self.failed_attempts:
-            attempts = self.failed_attempts[username]
-            if attempts['count'] >= 3:
-                lock_time = attempts['last_attempt'] + timedelta(minutes=5)
-                if datetime.now() < lock_time:
-                    return True
-        return False
-```
-
-**Description:**
-The AuthenticationManager provides:
-- Rate limiting for login attempts
-- Account lockout mechanism
-- Secure password verification
-- Session management
-
-Security Features:
-- 3-attempt limit before lockout
-- 5-minute lockout duration
-- Secure session handling
-- Failed attempt tracking
-
-Usage Example:
-```python
-# Initialize authentication manager
-auth_mgr = AuthenticationManager()
-
-# Attempt login
-try:
-    session = auth_mgr.authenticate_user("username", "password")
-except SecurityException as e:
-    print("Account locked:", e)
-```
-
-#### 5. Security Audit Logging
-```python
-class AuditLogger:
-    def __init__(self):
-        self.log_file = "security_audit.log"
-        logging.basicConfig(
-            filename=self.log_file,
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s'
-        )
-
-    def log_security_event(self, event_type, user, ip_address, details):
-        """Log security-related events"""
-        log_entry = {
-            'timestamp': datetime.now().isoformat(),
-            'event_type': event_type,
-            'user': user,
-            'ip_address': ip_address,
-            'details': details
+class SecureDataOperations:
+    def __init__(self, db, privacy_manager):
+        self.db = db
+        self.privacy_manager = privacy_manager
+        
+    def insert_user_data(self, user_data):
+        """Securely insert user data"""
+        encrypted_data = {
+            'name': self.privacy_manager.encrypt_personal_data(user_data['name']),
+            'email': self.privacy_manager.encrypt_personal_data(user_data['email']),
+            'address': self.privacy_manager.encrypt_personal_data(user_data['address'])
         }
-        logging.info(json.dumps(log_entry))
-
-    def log_failed_login(self, username, ip_address):
-        """Log failed login attempts"""
-        self.log_security_event(
-            'FAILED_LOGIN',
-            username,
-            ip_address,
-            'Failed login attempt'
-        )
+        
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO users (name, email, address)
+                VALUES (?, ?, ?)
+            """, (encrypted_data['name'], encrypted_data['email'], encrypted_data['address']))
+            conn.commit()
+            
+    def get_user_data(self, user_id):
+        """Securely retrieve user data"""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name, email, address FROM users WHERE id = ?", (user_id,))
+            row = cursor.fetchone()
+            
+            if row:
+                return {
+                    'name': self.privacy_manager.decrypt_personal_data(row[0]),
+                    'email': self.privacy_manager.decrypt_personal_data(row[1]),
+                    'address': self.privacy_manager.decrypt_personal_data(row[2])
+                }
+            return None
 ```
-
-**Description:**
-The AuditLogger provides comprehensive security monitoring:
-- Timestamped event logging
-- JSON-formatted log entries
-- IP address tracking
-- Event categorization
-
-Logging Features:
-- Automatic timestamp generation
-- Structured log format
-- Multiple event types
-- Easy log analysis
 
 Usage Example:
 ```python
-# Initialize audit logger
-audit = AuditLogger()
+# Initialize components
+db = SecureDatabase('shop.db')
+privacy_manager = DataPrivacyManager()
+data_ops = SecureDataOperations(db, privacy_manager)
+access_control = DataAccessControl(db)
 
-# Log security event
-audit.log_failed_login("username", "192.168.1.1")
+# Insert user data
+user_data = {
+    'name': 'John Doe',
+    'email': 'john@example.com',
+    'address': '123 Main St'
+}
+data_ops.insert_user_data(user_data)
+
+# Retrieve user data
+user = data_ops.get_user_data(1)
+
+# Log audit event
+db.log_audit_event(
+    user_id=1,
+    action='INSERT',
+    table_name='users',
+    record_id=1,
+    new_value=str(user_data)
+)
 ```
-
-### Implementation Best Practices
-
-1. **Encryption:**
-   - Store keys securely
-   - Rotate keys regularly
-   - Use environment variables
-   - Implement key backup
-
-2. **Database:**
-   - Regular backups
-   - Connection pooling
-   - Timeout management
-   - Error monitoring
-
-3. **SQL Protection:**
-   - Always use parameters
-   - Validate all inputs
-   - Implement timeouts
-   - Monitor queries
-
-4. **Authentication:**
-   - Strong password rules
-   - Session timeouts
-   - Regular cleanup
-   - Activity monitoring
-
-5. **Logging:**
-   - Regular rotation
-   - Secure storage
-   - Analysis tools
-   - Retention policies
 
 
