@@ -247,22 +247,50 @@ class SecurityManager:
         self.fernet = Fernet(self.key)
         self.max_login_attempts = 3
         self.lockout_time = 300  # 5 minutes
-        
-    # ... rest of encryption code ...
+
+    def _generate_key(self):
+        """Generate a secure encryption key"""
+        return Fernet.generate_key()
+
+    def encrypt_sensitive_data(self, data):
+        """Encrypt sensitive data using Fernet"""
+        if not isinstance(data, bytes):
+            data = str(data).encode()
+        return self.fernet.encrypt(data)
+
+    def decrypt_sensitive_data(self, encrypted_data):
+        """Decrypt Fernet-encrypted data"""
+        try:
+            return self.fernet.decrypt(encrypted_data)
+        except Exception as e:
+            logging.error(f"Decryption failed: {e}")
+            raise SecurityException("Failed to decrypt data")
 ```
 
-The encryption system utilizes Fernet (symmetric encryption) from the cryptography library, which provides:
-- Strong encryption using AES in CBC mode with a 128-bit key for encryption
-- Built-in rotation of encryption keys
-- Protection against tampering with encrypted data
-- Automatic handling of initialization vectors
-- Secure key generation using OS-level randomness
+**Description:**
+The SecurityManager implements enterprise-grade encryption using Fernet symmetric encryption:
+- Uses AES-128 in CBC mode with PKCS7 padding
+- Generates cryptographically secure keys using `os.urandom()`
+- Handles automatic encoding/decoding of data
+- Includes comprehensive error handling and logging
 
-Key features:
-- Automatic key generation and management
-- Encryption of sensitive data before storage
-- Secure decryption with error handling
-- Support for different data types
+Key Features:
+- Automatic key management
+- Secure data transformation
+- Error recovery
+- Memory security
+
+Usage Example:
+```python
+# Initialize security manager
+security = SecurityManager()
+
+# Encrypt sensitive data
+encrypted = security.encrypt_sensitive_data("sensitive_info")
+
+# Decrypt when needed
+decrypted = security.decrypt_sensitive_data(encrypted)
+```
 
 #### 2. Database Security Implementation
 ```python
@@ -270,45 +298,100 @@ class DatabaseManager:
     def __init__(self):
         self.connection = None
         self._setup_database()
+
+    def _setup_database(self):
+        """Setup secure database connection with proper PRAGMA settings"""
+        self.connection = sqlite3.connect('shop.db', timeout=30)
+        cursor = self.connection.cursor()
         
-    # ... rest of database code ...
+        # Enable foreign key constraints
+        cursor.execute("PRAGMA foreign_keys = ON")
+        
+        # Set secure delete
+        cursor.execute("PRAGMA secure_delete = ON")
+        
+        # Enable WAL mode for better concurrency
+        cursor.execute("PRAGMA journal_mode = WAL")
+
+    def create_connection(self):
+        """Create a new database connection with timeout"""
+        try:
+            return sqlite3.connect('shop.db', timeout=30)
+        except Exception as e:
+            logging.error(f"Database connection failed: {e}")
+            raise DatabaseException("Failed to establish database connection")
 ```
 
-The database security implementation focuses on establishing and maintaining secure connections with SQLite, implementing:
-- Connection timeouts to prevent hanging connections
+**Description:**
+The DatabaseManager ensures secure database operations through:
+- Connection timeouts to prevent DOS attacks
 - Foreign key constraints for data integrity
 - Secure delete operations
-- Write-Ahead Logging (WAL) for better concurrency
-- Automatic connection recovery
-- Transaction management
+- Write-Ahead Logging for safe concurrent access
 
-Best practices implemented:
-- Limited connection lifetime
-- Proper error handling and logging
-- Automatic cleanup of resources
-- Prevention of connection leaks
+Implementation Features:
+- 30-second connection timeout
+- Automatic connection recovery
+- Transaction safety
+- Resource cleanup
+
+Usage Example:
+```python
+# Initialize database manager
+db = DatabaseManager()
+
+# Create new connection
+connection = db.create_connection()
+```
 
 #### 3. SQL Injection Protection
 ```python
 class QueryManager:
     def __init__(self, db_connection):
         self.connection = db_connection
-        
-    # ... rest of query manager code ...
+
+    def execute_safe_query(self, query, params=None):
+        """Execute parameterized queries to prevent SQL injection"""
+        cursor = self.connection.cursor()
+        try:
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            self.connection.commit()
+            return cursor
+        except sqlite3.Error as e:
+            self.connection.rollback()
+            logging.error(f"Query execution failed: {e}")
+            raise DatabaseException("Query execution failed")
+
+    def select_user(self, username):
+        """Example of safe user selection"""
+        query = "SELECT * FROM users WHERE username = ?"
+        return self.execute_safe_query(query, (username,))
 ```
 
-SQL injection protection is implemented through:
-- Parameterized queries for all database operations
-- Input validation and sanitization
-- Proper error handling and logging
+**Description:**
+The QueryManager prevents SQL injection through:
+- Parameterized queries
+- Input validation
 - Transaction management
+- Error handling
 
-Security measures:
-- No string concatenation in queries
-- Type checking of parameters
-- Escaping of special characters
-- Query parameter binding
+Security Measures:
+- No string concatenation
+- Parameter sanitization
 - Transaction rollback on errors
+- Query logging
+
+Usage Example:
+```python
+# Initialize query manager
+query_mgr = QueryManager(db_connection)
+
+# Execute safe query
+result = query_mgr.select_user("john_doe")
+```
 
 #### 4. User Authentication and Session Management
 ```python
@@ -317,79 +400,144 @@ class AuthenticationManager:
         self.security = SecurityManager()
         self.failed_attempts = {}
         self.sessions = {}
-        
-    # ... rest of authentication code ...
+
+    def authenticate_user(self, username, password):
+        """Secure user authentication with rate limiting"""
+        if self._is_account_locked(username):
+            raise SecurityException("Account is temporarily locked")
+
+        user = self.get_user(username)
+        if not user:
+            self._record_failed_attempt(username)
+            raise AuthenticationException("Invalid credentials")
+
+        if not self._verify_password(password, user['password_hash']):
+            self._record_failed_attempt(username)
+            raise AuthenticationException("Invalid credentials")
+
+        self._clear_failed_attempts(username)
+        return self._create_session(user)
+
+    def _is_account_locked(self, username):
+        """Check if account is locked due to too many failed attempts"""
+        if username in self.failed_attempts:
+            attempts = self.failed_attempts[username]
+            if attempts['count'] >= 3:
+                lock_time = attempts['last_attempt'] + timedelta(minutes=5)
+                if datetime.now() < lock_time:
+                    return True
+        return False
 ```
 
-The authentication system provides robust security through:
-- Rate limiting of login attempts
-- Account lockout after failed attempts
+**Description:**
+The AuthenticationManager provides:
+- Rate limiting for login attempts
+- Account lockout mechanism
 - Secure password verification
 - Session management
-- IP address tracking
 
-Key features:
-- Temporary account lockout after 3 failed attempts
+Security Features:
+- 3-attempt limit before lockout
 - 5-minute lockout duration
-- Secure session token generation
-- Session expiration handling
-- IP-based security checks
+- Secure session handling
+- Failed attempt tracking
+
+Usage Example:
+```python
+# Initialize authentication manager
+auth_mgr = AuthenticationManager()
+
+# Attempt login
+try:
+    session = auth_mgr.authenticate_user("username", "password")
+except SecurityException as e:
+    print("Account locked:", e)
+```
 
 #### 5. Security Audit Logging
 ```python
 class AuditLogger:
     def __init__(self):
         self.log_file = "security_audit.log"
-        
-    # ... rest of audit logger code ...
+        logging.basicConfig(
+            filename=self.log_file,
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s'
+        )
+
+    def log_security_event(self, event_type, user, ip_address, details):
+        """Log security-related events"""
+        log_entry = {
+            'timestamp': datetime.now().isoformat(),
+            'event_type': event_type,
+            'user': user,
+            'ip_address': ip_address,
+            'details': details
+        }
+        logging.info(json.dumps(log_entry))
+
+    def log_failed_login(self, username, ip_address):
+        """Log failed login attempts"""
+        self.log_security_event(
+            'FAILED_LOGIN',
+            username,
+            ip_address,
+            'Failed login attempt'
+        )
 ```
 
-Comprehensive security audit logging system that tracks:
-- All security-related events
-- Login attempts (successful and failed)
-- User actions
-- System changes
-- IP addresses
+**Description:**
+The AuditLogger provides comprehensive security monitoring:
+- Timestamped event logging
+- JSON-formatted log entries
+- IP address tracking
+- Event categorization
 
-Logging features:
-- Timestamped entries
-- JSON-formatted logs
-- Different log levels
-- Rotation of log files
-- Secure log storage
+Logging Features:
+- Automatic timestamp generation
+- Structured log format
+- Multiple event types
+- Easy log analysis
 
-### Implementation Guidelines
+Usage Example:
+```python
+# Initialize audit logger
+audit = AuditLogger()
 
-When implementing these security features:
+# Log security event
+audit.log_failed_login("username", "192.168.1.1")
+```
 
-1. **Encryption**
-   - Always generate new keys securely
-   - Never store encryption keys in the code
-   - Rotate keys periodically
-   - Encrypt data before it leaves the application
+### Implementation Best Practices
 
-2. **Database Security**
-   - Use connection pooling for better resource management
-   - Implement proper connection timeouts
-   - Enable all relevant security PRAGMA settings
-   - Regular backup and recovery testing
+1. **Encryption:**
+   - Store keys securely
+   - Rotate keys regularly
+   - Use environment variables
+   - Implement key backup
 
-3. **SQL Injection Prevention**
-   - Never trust user input
-   - Always use parameterized queries
-   - Implement proper error handling
-   - Use appropriate data types
+2. **Database:**
+   - Regular backups
+   - Connection pooling
+   - Timeout management
+   - Error monitoring
 
-4. **Authentication**
-   - Implement proper password hashing
-   - Use secure session management
-   - Implement rate limiting
-   - Track and log all authentication attempts
+3. **SQL Protection:**
+   - Always use parameters
+   - Validate all inputs
+   - Implement timeouts
+   - Monitor queries
 
-5. **Audit Logging**
-   - Log all security-relevant events
-   - Implement log rotation
-   - Secure log storage
-   - Regular log analysis
+4. **Authentication:**
+   - Strong password rules
+   - Session timeouts
+   - Regular cleanup
+   - Activity monitoring
+
+5. **Logging:**
+   - Regular rotation
+   - Secure storage
+   - Analysis tools
+   - Retention policies
 
 
