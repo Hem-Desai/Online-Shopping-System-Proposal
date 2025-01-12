@@ -89,9 +89,8 @@ class SecureDatabase:
                 self.connection_pool[thread_id].close()
                 del self.connection_pool[thread_id]
 ```
-      - Fernet encryption for sensitive data
-      - Secure key generation
-      - Encrypted data storage and retrieval
+Fernet encryption for sensitive data, Secure key generation, Encrypted data storage and retrieval
+
 
 - **Access Control**
 ```python
@@ -124,10 +123,7 @@ class DataAccessControl:
         user_level = self.user_permissions.get(user_id, AccessLevel.READ)
         return user_level.value >= required_level.value
 ```
-  - Exclusive database connections
-  - Connection timeouts
-  - Foreign key constraints
-  - PRAGMA secure settings
+Exclusive database connections, Connection timeouts, Foreign key constraints, PRAGMA secure settings
 
 - **Security Monitoring**
 ```python
@@ -167,10 +163,7 @@ class SecureDataOperations:
                 }
             return None
 ```
-      - Security audit logging
-      - User action tracking
-      - IP address monitoring
-      - Timestamp tracking
+Security audit logging, User action tracking, IP address monitoring, Timestamp tracking
 
 - **SQL Injection Protection**
 ```python
@@ -220,9 +213,7 @@ class SQLInjectionProtection:
             logging.error(f"Query execution failed: {e}")
             raise DatabaseException("Query execution failed")
 ```
-      - Query parameterization
-      - Pattern detection
-      - Security exception handling
+Query parameterization, Pattern detection, Security exception handling
 
 - **Enhanced User Security**
 ```python
@@ -268,10 +259,7 @@ class UserSecurity:
             algorithm='HS256'
         )
 ```
-      - Failed login attempt tracking
-      - Account locking mechanism
-      - Last login monitoring
-      - Creation time tracking
+Failed login attempt tracking, Account locking mechanism, Last login monitoring, Creation time tracking
 
 ### Encryption Implementation Details
 The system implements Fernet symmetric encryption from the cryptography library for data protection.
