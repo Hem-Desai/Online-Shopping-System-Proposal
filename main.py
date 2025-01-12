@@ -3,6 +3,7 @@ from security import SecurityManager
 from models import Customer, Product, Order, CustomerRepository, ProductRepository, PaymentRepository, DeliveryRepository, Payment, Delivery
 import logging
 from decimal import Decimal
+import bcrypt
 
 class OnlineShoppingSystem:
     """Main class for the Online Shopping System."""
@@ -32,20 +33,19 @@ class OnlineShoppingSystem:
     def register_user(self, name: str, email: str, password: str, is_admin: bool = False) -> bool:
         """Register a new user."""
         try:
-            # Check if user already exists
-            if self.customer_repo.get_customer_by_email(email):
-                self.logger.warning(f"Email {email} already exists")
-                return False
+            # Hash the password before storing
+            salt = bcrypt.gensalt()
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
             
-            # Hash password and create user
-            password_hash = self.security.hash_password(password)
-            customer = Customer(name=name, email=email, password_hash=password_hash, is_admin=is_admin)
-            created_customer = self.customer_repo.create_customer(customer)
-            
-            if created_customer:
-                self.logger.info(f"User {name} registered successfully")
+            with self.db.get_connection() as conn:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO customers (name, email, password_hash, is_admin)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (name, email, hashed_password, is_admin)
+                )
                 return True
-            return False
         except Exception as e:
             self.logger.error(f"Error registering user: {str(e)}")
             return False
@@ -53,18 +53,28 @@ class OnlineShoppingSystem:
     def login(self, email: str, password: str) -> bool:
         """Log in a user."""
         try:
-            customer = self.customer_repo.get_customer_by_email(email)
-            if not customer:
-                self.logger.warning(f"User with email {email} not found")
+            with self.db.get_connection() as conn:
+                cursor = conn.execute(
+                    """SELECT customer_id, name, email, password_hash, is_admin 
+                    FROM customers WHERE email = ?""",
+                    (email,)
+                )
+                user_data = cursor.fetchone()
+                
+                if user_data and bcrypt.checkpw(
+                    password.encode('utf-8'),
+                    user_data[3]  # password_hash
+                ):
+                    # Set the current user after successful login
+                    self.current_user = Customer(
+                        customer_id=user_data[0],
+                        name=user_data[1],
+                        email=user_data[2],
+                        password_hash=user_data[3],
+                        is_admin=user_data[4]
+                    )
+                    return True
                 return False
-            
-            if self.security.verify_password(password, customer.password_hash):
-                self.current_user = customer
-                self.logger.info(f"User {email} logged in successfully")
-                return True
-            
-            self.logger.warning(f"Invalid password for email {email}")
-            return False
         except Exception as e:
             self.logger.error(f"Error during login: {str(e)}")
             return False

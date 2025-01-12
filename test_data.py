@@ -3,19 +3,23 @@ from decimal import Decimal
 import logging
 import time
 import os
+from getpass import getpass
 
 def setup_test_data():
     """Insert mock data and test basic functionality."""
-    # Delete existing database
-    if os.path.exists("shop.db"):
-        os.remove("shop.db")
-        time.sleep(1)  # Add small delay to ensure file is deleted
-        
-    # Initialize the system
     shop = OnlineShoppingSystem()
     
     try:
-        # 1. Create test users (1 admin, 2 regular users)
+        # Check if database already has users
+        with shop.db.get_connection() as conn:
+            cursor = conn.execute("SELECT COUNT(*) FROM customers")
+            user_count = cursor.fetchone()[0]
+            
+            if user_count > 0:
+                print("\nDatabase already contains users. Skipping test data setup.")
+                return True
+                
+        # If no users exist, create test data
         print("\n=== Creating Test Users ===")
         
         # Admin user
@@ -103,9 +107,191 @@ def setup_test_data():
         logging.error(f"Error in test setup: {str(e)}")
         return False
 
+def run_interactive_menu():
+    shop = OnlineShoppingSystem()
+    while True:  # Add main loop
+        print("\n=== Main Menu ===")
+        print("1. Create new account")
+        print("2. Login")
+        print("3. Exit")
+        
+        choice = input("Enter your choice (1-3): ")
+        
+        if choice == "1":
+            print("\n=== Create New Account ===")
+            name = input("Enter your name: ")
+            email = input("Enter your email: ")
+            password = getpass("Enter your password: ")
+            
+            user_created = shop.register_user(
+                name=name,
+                email=email,
+                password=password,
+                is_admin=False
+            )
+            
+            if user_created:
+                print("Account created successfully!")
+                print("\n=== User Login ===")
+                email = input("Enter email: ")
+                password = getpass("Enter password: ")
+                
+                login_success = shop.login(email=email, password=password)
+                if login_success:
+                    print("Login successful!")
+                    show_product_menu(shop)  # Add this line
+                    return
+                else:
+                    print("Login failed. Invalid credentials.")
+            else:
+                print("Failed to create account. Email might already exist.")
+            
+        elif choice == "2":
+            print("\n=== User Login ===")
+            email = input("Enter email: ")
+            password = getpass("Enter password: ")
+            
+            login_success = shop.login(email=email, password=password)
+            if login_success:
+                print("Login successful!")
+                show_product_menu(shop)  # Add this line
+                return
+            else:
+                print("Login failed. Invalid credentials.")
+            
+        elif choice == "3":
+            print("Goodbye!")
+            break  # Add break instead of just returning
+            
+        else:
+            print("Invalid choice. Please try again.")
+
+def show_product_menu(shop):
+    while True:
+        print("\n=== Product Menu ===")
+        print("1. View all products")
+        print("2. Select product to purchase")
+        if shop.current_user and shop.current_user.is_admin:
+            print("3. Add new product (Admin only)")
+            print("4. Logout")
+        else:
+            print("3. Logout")
+        
+        choice = input("Enter your choice: ")
+        
+        if choice == "1":
+            with shop.db.get_connection() as conn:
+                cursor = conn.execute(
+                    "SELECT name, price, stock_quantity, description FROM products"
+                )
+                print("\n=== Available Products ===")
+                for row in cursor.fetchall():
+                    print(f"Name: {row[0]}")
+                    print(f"Price: ${row[1]}")
+                    print(f"Stock: {row[2]}")
+                    print(f"Description: {row[3]}")
+                    print("-" * 30)
+                    
+        elif choice == "2":
+            # Show products with IDs for selection
+            with shop.db.get_connection() as conn:
+                cursor = conn.execute(
+                    "SELECT product_id, name, price, stock_quantity FROM products"
+                )
+                products = cursor.fetchall()
+                
+                print("\n=== Select a Product ===")
+                for product in products:
+                    print(f"ID: {product[0]}, Name: {product[1]}, Price: ${product[2]}, Stock: {product[3]}")
+                
+                try:
+                    product_id = int(input("\nEnter product ID to purchase (0 to cancel): "))
+                    if product_id == 0:
+                        continue
+                    
+                    # Get current stock for the selected product
+                    cursor = conn.execute(
+                        "SELECT stock_quantity, name, price FROM products WHERE product_id = ?",
+                        (product_id,)
+                    )
+                    product = cursor.fetchone()
+                    
+                    if not product:
+                        print("Invalid product ID!")
+                        continue
+                        
+                    current_stock = product[0]
+                    product_name = product[1]
+                    price = product[2]
+                    
+                    quantity = int(input("Enter quantity: "))
+                    
+                    # Check if enough stock
+                    if quantity <= 0:
+                        print("Please enter a valid quantity!")
+                        continue
+                    
+                    if quantity > current_stock:
+                        print(f"Sorry, only {current_stock} items available in stock!")
+                        continue
+                    
+                    # Calculate total price
+                    total_price = price * quantity
+                    
+                    # Confirm purchase
+                    print(f"\nOrder Summary:")
+                    print(f"Product: {product_name}")
+                    print(f"Quantity: {quantity}")
+                    print(f"Total Price: ${total_price:.2f}")
+                    
+                    confirm = input("\nConfirm purchase? (y/n): ").lower()
+                    if confirm == 'y':
+                        # Update stock quantity
+                        new_quantity = current_stock - quantity
+                        cursor.execute(
+                            "UPDATE products SET stock_quantity = ? WHERE product_id = ?",
+                            (new_quantity, product_id)
+                        )
+                        conn.commit()
+                        print("\nPurchase successful! Thank you for your order.")
+                        print(f"Remaining stock: {new_quantity}")
+                    else:
+                        print("Purchase cancelled.")
+                    
+                except ValueError:
+                    print("Invalid input. Please enter a number.")
+                    
+        elif choice == "3" and shop.current_user and shop.current_user.is_admin:
+            print("\n=== Add New Product ===")
+            name = input("Enter product name: ")
+            price = float(input("Enter price: "))
+            quantity = int(input("Enter stock quantity: "))
+            description = input("Enter product description: ")
+            
+            product_added = shop.add_product(
+                name=name,
+                price=price,
+                quantity=quantity,
+                description=description
+            )
+            
+            if product_added:
+                print("Product added successfully!")
+            else:
+                print("Failed to add product.")
+                
+        elif (choice == "4" and shop.current_user and shop.current_user.is_admin) or \
+             (choice == "3" and not shop.current_user.is_admin):
+            print("Logging out...")
+            break
+            
+        else:
+            print("Invalid choice. Please try again.")
+
 if __name__ == "__main__":
     success = setup_test_data()
     if success:
         print("\nTest data setup completed successfully!")
+        run_interactive_menu()
     else:
         print("\nError setting up test data. Check logs for details.")
