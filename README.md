@@ -233,4 +233,163 @@ online-shopping-system/
 ## 📧 Contact
 Mohammed Harahsheh - mohmmedh1@hotmail.com
 
+### Security Implementation Examples
+
+#### 1. Enhanced Encryption System
+```python
+from cryptography.fernet import Fernet
+from base64 import b64encode
+import os
+
+class SecurityManager:
+    def __init__(self):
+        self.key = self._generate_key()
+        self.fernet = Fernet(self.key)
+        self.max_login_attempts = 3
+        self.lockout_time = 300  # 5 minutes
+        
+    # ... rest of encryption code ...
+```
+
+The encryption system utilizes Fernet (symmetric encryption) from the cryptography library, which provides:
+- Strong encryption using AES in CBC mode with a 128-bit key for encryption
+- Built-in rotation of encryption keys
+- Protection against tampering with encrypted data
+- Automatic handling of initialization vectors
+- Secure key generation using OS-level randomness
+
+Key features:
+- Automatic key generation and management
+- Encryption of sensitive data before storage
+- Secure decryption with error handling
+- Support for different data types
+
+#### 2. Database Security Implementation
+```python
+class DatabaseManager:
+    def __init__(self):
+        self.connection = None
+        self._setup_database()
+        
+    # ... rest of database code ...
+```
+
+The database security implementation focuses on establishing and maintaining secure connections with SQLite, implementing:
+- Connection timeouts to prevent hanging connections
+- Foreign key constraints for data integrity
+- Secure delete operations
+- Write-Ahead Logging (WAL) for better concurrency
+- Automatic connection recovery
+- Transaction management
+
+Best practices implemented:
+- Limited connection lifetime
+- Proper error handling and logging
+- Automatic cleanup of resources
+- Prevention of connection leaks
+
+#### 3. SQL Injection Protection
+```python
+class QueryManager:
+    def __init__(self, db_connection):
+        self.connection = db_connection
+        
+    # ... rest of query manager code ...
+```
+
+SQL injection protection is implemented through:
+- Parameterized queries for all database operations
+- Input validation and sanitization
+- Proper error handling and logging
+- Transaction management
+
+Security measures:
+- No string concatenation in queries
+- Type checking of parameters
+- Escaping of special characters
+- Query parameter binding
+- Transaction rollback on errors
+
+#### 4. User Authentication and Session Management
+```python
+class AuthenticationManager:
+    def __init__(self):
+        self.security = SecurityManager()
+        self.failed_attempts = {}
+        self.sessions = {}
+        
+    # ... rest of authentication code ...
+```
+
+The authentication system provides robust security through:
+- Rate limiting of login attempts
+- Account lockout after failed attempts
+- Secure password verification
+- Session management
+- IP address tracking
+
+Key features:
+- Temporary account lockout after 3 failed attempts
+- 5-minute lockout duration
+- Secure session token generation
+- Session expiration handling
+- IP-based security checks
+
+#### 5. Security Audit Logging
+```python
+class AuditLogger:
+    def __init__(self):
+        self.log_file = "security_audit.log"
+        
+    # ... rest of audit logger code ...
+```
+
+Comprehensive security audit logging system that tracks:
+- All security-related events
+- Login attempts (successful and failed)
+- User actions
+- System changes
+- IP addresses
+
+Logging features:
+- Timestamped entries
+- JSON-formatted logs
+- Different log levels
+- Rotation of log files
+- Secure log storage
+
+### Implementation Guidelines
+
+When implementing these security features:
+
+1. **Encryption**
+   - Always generate new keys securely
+   - Never store encryption keys in the code
+   - Rotate keys periodically
+   - Encrypt data before it leaves the application
+
+2. **Database Security**
+   - Use connection pooling for better resource management
+   - Implement proper connection timeouts
+   - Enable all relevant security PRAGMA settings
+   - Regular backup and recovery testing
+
+3. **SQL Injection Prevention**
+   - Never trust user input
+   - Always use parameterized queries
+   - Implement proper error handling
+   - Use appropriate data types
+
+4. **Authentication**
+   - Implement proper password hashing
+   - Use secure session management
+   - Implement rate limiting
+   - Track and log all authentication attempts
+
+5. **Audit Logging**
+   - Log all security-relevant events
+   - Implement log rotation
+   - Secure log storage
+   - Regular log analysis
+
 
