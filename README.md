@@ -30,6 +30,83 @@ A robust e-commerce backend system built with Python, featuring secure user auth
 - Protected admin functionalities
 - Session management
 
+### Database Security & Privacy
+- **Data Encryption**
+  - Fernet encryption for sensitive data
+  - Secure key generation
+  - Encrypted data storage and retrieval
+
+- **Access Control**
+  - Exclusive database connections
+  - Connection timeouts
+  - Foreign key constraints
+  - PRAGMA secure settings
+
+- **Security Monitoring**
+  - Security audit logging
+  - User action tracking
+  - IP address monitoring
+  - Timestamp tracking
+
+- **SQL Injection Protection**
+  - Query parameterization
+  - Pattern detection
+  - Security exception handling
+
+- **Enhanced User Security**
+  - Failed login attempt tracking
+  - Account locking mechanism
+  - Last login monitoring
+  - Creation time tracking
+
+### Encryption Implementation Details
+The system implements Fernet symmetric encryption from the cryptography library for data protection.
+
+#### 1. Key Generation
+```python
+def _generate_key(self):
+    """Generate a secure encryption key"""
+    key = os.urandom(32)
+    return b64encode(key)
+```
+Generates a secure 32-byte random key using Python's cryptographically secure random number generator.
+
+#### 2. Data Encryption
+```python
+def _encrypt_data(self, data):
+    """Encrypt sensitive data before storing"""
+    if isinstance(data, str):
+        return self.fernet.encrypt(data.encode()).decode()
+    return data
+```
+Used to encrypt sensitive information before database storage.
+
+#### 3. Data Decryption
+```python
+def _decrypt_data(self, data):
+    """Decrypt data when retrieving"""
+    if isinstance(data, str):
+        try:
+            return self.fernet.decrypt(data.encode()).decode()
+        except:
+            return data
+    return data
+```
+Securely decrypts data when retrieved from the database.
+
+#### 4. Implementation Example
+```python
+def execute_query(self, query, params=None):
+    if params:
+        # Encrypt sensitive parameters
+        encrypted_params = [
+            self._encrypt_data(p) if isinstance(p, str) else p 
+            for p in params
+        ]
+        cursor.execute(query, encrypted_params)
+```
+Automatically encrypts string parameters in database queries.
+
 ### Object-Oriented Design Principles
 - **Encapsulation**
   - Private data members
