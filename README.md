@@ -32,28 +32,242 @@ A robust e-commerce backend system built with Python, featuring secure user auth
 
 ### Database Security & Privacy
 - **Data Encryption**
+```python
+import sqlite3
+from contextlib import contextmanager
+import threading
+
+class SecureDatabase:
+    def __init__(self, db_name):
+        self.db_name = db_name
+        self.connection_pool = {}
+        self._setup_database()
+        
+    def _setup_database(self):
+        """Initialize database with security settings"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Enable security features
+            cursor.executescript("""
+                PRAGMA foreign_keys = ON;
+                PRAGMA secure_delete = ON;
+                PRAGMA journal_mode = WAL;
+                PRAGMA synchronous = NORMAL;
+                PRAGMA temp_store = MEMORY;
+                PRAGMA mmap_size = 30000000000;
+            """)
+            
+            # Create audit log table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    user_id INTEGER,
+                    action TEXT,
+                    table_name TEXT,
+                    record_id INTEGER,
+                    old_value TEXT,
+                    new_value TEXT
+                )
+            """)
+
+    @contextmanager
+    def get_connection(self):
+        """Get thread-safe database connection"""
+        thread_id = threading.get_ident()
+        if thread_id not in self.connection_pool:
+            self.connection_pool[thread_id] = sqlite3.connect(
+                self.db_name,
+                timeout=30,
+                isolation_level='EXCLUSIVE'
+            )
+        try:
+            yield self.connection_pool[thread_id]
+        finally:
+            if thread_id in self.connection_pool:
+                self.connection_pool[thread_id].close()
+                del self.connection_pool[thread_id]
+```
   - Fernet encryption for sensitive data
   - Secure key generation
   - Encrypted data storage and retrieval
 
 - **Access Control**
+```python
+from enum import Enum
+from functools import wraps
+
+class AccessLevel(Enum):
+    READ = 1
+    WRITE = 2
+    ADMIN = 3
+
+class DataAccessControl:
+    def __init__(self, db):
+        self.db = db
+        self.user_permissions = {}
+
+    def require_permission(self, required_level):
+        """Decorator to check permission level"""
+        def decorator(f):
+            @wraps(f)
+            def wrapped(self, user_id, *args, **kwargs):
+                if not self._check_permission(user_id, required_level):
+                    raise PermissionError(f"User {user_id} lacks {required_level} permission")
+                return f(self, user_id, *args, **kwargs)
+            return wrapped
+        return decorator
+
+    def _check_permission(self, user_id, required_level):
+        """Check if user has required permission level"""
+        user_level = self.user_permissions.get(user_id, AccessLevel.READ)
+        return user_level.value >= required_level.value
+```
   - Exclusive database connections
   - Connection timeouts
   - Foreign key constraints
   - PRAGMA secure settings
 
 - **Security Monitoring**
+```python
+class SecureDataOperations:
+    def __init__(self, db, privacy_manager):
+        self.db = db
+        self.privacy_manager = privacy_manager
+        
+    def insert_user_data(self, user_data):
+        """Securely insert user data"""
+        encrypted_data = {
+            'name': self.privacy_manager.encrypt_personal_data(user_data['name']),
+            'email': self.privacy_manager.encrypt_personal_data(user_data['email']),
+            'address': self.privacy_manager.encrypt_personal_data(user_data['address'])
+        }
+        
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO users (name, email, address)
+                VALUES (?, ?, ?)
+            """, (encrypted_data['name'], encrypted_data['email'], encrypted_data['address']))
+            conn.commit()
+            
+    def get_user_data(self, user_id):
+        """Securely retrieve user data"""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name, email, address FROM users WHERE id = ?", (user_id,))
+            row = cursor.fetchone()
+            
+            if row:
+                return {
+                    'name': self.privacy_manager.decrypt_personal_data(row[0]),
+                    'email': self.privacy_manager.decrypt_personal_data(row[1]),
+                    'address': self.privacy_manager.decrypt_personal_data(row[2])
+                }
+            return None
+```
   - Security audit logging
   - User action tracking
   - IP address monitoring
   - Timestamp tracking
 
 - **SQL Injection Protection**
+```python
+from typing import Any, List, Dict
+import re
+
+class SQLInjectionProtection:
+    def __init__(self):
+        self.sql_patterns = [
+            r'(\s*([\0\b\'\"\n\r\t\%\_\\]*\s*(((select\s*.+\s*from)|(insert\s*.+\s*into)|(update\s*.+\s*set)|(delete\s*.+\s*from)|(drop\s*.+)|(truncate\s*.+)|(alter\s*.+)|(exec\s*.+)|(\s*(all|any|not|and|between|in|like|or|some|contains|containsall|containskey)\s*.+[\=\>\<=\!\~]+))\s*[\"\s\'\/\*]+)))',
+            r'((\%27)|(\'))\s*((\%6F)|o|(\%4F))((\%72)|r|(\%52))',
+            r'((\%27)|(\'))\s*((\%6F)|o|(\%4F))((\%72)|r|(\%52))',
+            r'((\%27)|(\'))\s*((\%6F)|o|(\%4F))((\%72)|r|(\%52))'
+        ]
+        self.prepared_statements = {}
+        
+    def sanitize_input(self, value: Any) -> Any:
+        """Sanitize input to prevent SQL injection"""
+        if isinstance(value, str):
+            # Remove dangerous SQL characters
+            value = re.sub(r'[\0\b\'\"\n\r\t\%\_\\]', '', value)
+            # Check for SQL injection patterns
+            for pattern in self.sql_patterns:
+                if re.search(pattern, value, re.IGNORECASE):
+                    raise ValueError("Potential SQL injection detected")
+        return value
+
+    def prepare_statement(self, query: str, params: Dict[str, Any] = None) -> tuple:
+        """Prepare SQL statement with parameters"""
+        if params:
+            sanitized_params = {
+                key: self.sanitize_input(value)
+                for key, value in params.items()
+            }
+            return (query, sanitized_params)
+        return (query, None)
+
+    def execute_safe_query(self, cursor, query: str, params: Dict[str, Any] = None):
+        """Execute query with SQL injection protection"""
+        try:
+            prepared_query, sanitized_params = self.prepare_statement(query, params)
+            if sanitized_params:
+                cursor.execute(prepared_query, sanitized_params)
+            else:
+                cursor.execute(prepared_query)
+        except Exception as e:
+            logging.error(f"Query execution failed: {e}")
+            raise DatabaseException("Query execution failed")
+```
   - Query parameterization
   - Pattern detection
   - Security exception handling
 
 - **Enhanced User Security**
+```python
+from datetime import datetime, timedelta
+import bcrypt
+import jwt
+
+class UserSecurity:
+    def __init__(self):
+        self.max_attempts = 3
+        self.lockout_time = 15  # minutes
+        self.attempts = {}
+        self.secret = os.urandom(32)
+
+    def check_attempts(self, username):
+        """Check if account is locked"""
+        if username in self.attempts:
+            if self.attempts[username]['count'] >= self.max_attempts:
+                if datetime.now() - self.attempts[username]['time'] < timedelta(minutes=self.lockout_time):
+                    return False
+                self.attempts.pop(username)
+        return True
+
+    def track_login(self, username, success):
+        """Track login attempts"""
+        if success:
+            self.attempts.pop(username, None)
+        else:
+            self.attempts[username] = {
+                'count': self.attempts.get(username, {}).get('count', 0) + 1,
+                'time': datetime.now()
+            }
+
+    def verify_password(self, password, hashed):
+        """Verify password"""
+        return bcrypt.checkpw(password.encode(), hashed)
+
+    def create_token(self, user_id):
+        """Create session token"""
+        return jwt.encode(
+            {'user_id': user_id, 'exp': datetime.utcnow() + timedelta(hours=24)},
+            self.secret,
+            algorithm='HS256'
+        )
+```
   - Failed login attempt tracking
   - Account locking mechanism
   - Last login monitoring
@@ -242,213 +456,3 @@ online-shopping-system/
 
 ## 📧 Contact
 Mohammed Harahsheh - mohmmedh1@hotmail.com
-
-### Database Security & Privacy Implementation
-
-#### 1. Data Privacy Manager
-Handles encryption and secure storage of sensitive data using Fernet symmetric encryption.
-
-```python
-from cryptography.fernet import Fernet
-import base64
-import os
-
-class DataPrivacyManager:
-    def __init__(self):
-        self.encryption_key = self._load_or_generate_key()
-        self.fernet = Fernet(self.encryption_key)
-        
-    def _load_or_generate_key(self):
-        """Load existing key or generate new one"""
-        key_file = "encryption.key"
-        if os.path.exists(key_file):
-            with open(key_file, "rb") as f:
-                return f.read()
-        else:
-            key = Fernet.generate_key()
-            with open(key_file, "wb") as f:
-                f.write(key)
-            return key
-            
-    def encrypt_personal_data(self, data):
-        """Encrypt personal information"""
-        if isinstance(data, str):
-            return self.fernet.encrypt(data.encode()).decode()
-        return data
-        
-    def decrypt_personal_data(self, encrypted_data):
-        """Decrypt personal information"""
-        if isinstance(encrypted_data, str):
-            try:
-                return self.fernet.decrypt(encrypted_data.encode()).decode()
-            except:
-                return encrypted_data
-        return encrypted_data
-```
-
-#### 2. Enhanced Database Security
-Provides thread-safe database connections with security features and audit logging.
-
-```python
-import sqlite3
-from contextlib import contextmanager
-import threading
-
-class SecureDatabase:
-    def __init__(self, db_name):
-        self.db_name = db_name
-        self.connection_pool = {}
-        self._setup_database()
-        
-    def _setup_database(self):
-        """Initialize database with security settings"""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Enable security features
-            cursor.executescript("""
-                PRAGMA foreign_keys = ON;
-                PRAGMA secure_delete = ON;
-                PRAGMA journal_mode = WAL;
-                PRAGMA synchronous = NORMAL;
-                PRAGMA temp_store = MEMORY;
-                PRAGMA mmap_size = 30000000000;
-            """)
-            
-            # Create audit log table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS audit_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    user_id INTEGER,
-                    action TEXT,
-                    table_name TEXT,
-                    record_id INTEGER,
-                    old_value TEXT,
-                    new_value TEXT
-                )
-            """)
-
-    @contextmanager
-    def get_connection(self):
-        """Get thread-safe database connection"""
-        thread_id = threading.get_ident()
-        if thread_id not in self.connection_pool:
-            self.connection_pool[thread_id] = sqlite3.connect(
-                self.db_name,
-                timeout=30,
-                isolation_level='EXCLUSIVE'
-            )
-        try:
-            yield self.connection_pool[thread_id]
-        finally:
-            if thread_id in self.connection_pool:
-                self.connection_pool[thread_id].close()
-                del self.connection_pool[thread_id]
-```
-
-#### 3. Data Access Control
-Implements role-based access control for database operations.
-
-```python
-from enum import Enum
-from functools import wraps
-
-class AccessLevel(Enum):
-    READ = 1
-    WRITE = 2
-    ADMIN = 3
-
-class DataAccessControl:
-    def __init__(self, db):
-        self.db = db
-        self.user_permissions = {}
-
-    def require_permission(self, required_level):
-        """Decorator to check permission level"""
-        def decorator(f):
-            @wraps(f)
-            def wrapped(self, user_id, *args, **kwargs):
-                if not self._check_permission(user_id, required_level):
-                    raise PermissionError(f"User {user_id} lacks {required_level} permission")
-                return f(self, user_id, *args, **kwargs)
-            return wrapped
-        return decorator
-
-    def _check_permission(self, user_id, required_level):
-        """Check if user has required permission level"""
-        user_level = self.user_permissions.get(user_id, AccessLevel.READ)
-        return user_level.value >= required_level.value
-```
-
-#### 4. Secure Data Operations
-Manages secure data operations with automatic encryption.
-
-```python
-class SecureDataOperations:
-    def __init__(self, db, privacy_manager):
-        self.db = db
-        self.privacy_manager = privacy_manager
-        
-    def insert_user_data(self, user_data):
-        """Securely insert user data"""
-        encrypted_data = {
-            'name': self.privacy_manager.encrypt_personal_data(user_data['name']),
-            'email': self.privacy_manager.encrypt_personal_data(user_data['email']),
-            'address': self.privacy_manager.encrypt_personal_data(user_data['address'])
-        }
-        
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO users (name, email, address)
-                VALUES (?, ?, ?)
-            """, (encrypted_data['name'], encrypted_data['email'], encrypted_data['address']))
-            conn.commit()
-            
-    def get_user_data(self, user_id):
-        """Securely retrieve user data"""
-        with self.db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT name, email, address FROM users WHERE id = ?", (user_id,))
-            row = cursor.fetchone()
-            
-            if row:
-                return {
-                    'name': self.privacy_manager.decrypt_personal_data(row[0]),
-                    'email': self.privacy_manager.decrypt_personal_data(row[1]),
-                    'address': self.privacy_manager.decrypt_personal_data(row[2])
-                }
-            return None
-```
-
-Usage Example:
-```python
-# Initialize components
-db = SecureDatabase('shop.db')
-privacy_manager = DataPrivacyManager()
-data_ops = SecureDataOperations(db, privacy_manager)
-access_control = DataAccessControl(db)
-
-# Insert user data
-user_data = {
-    'name': 'John Doe',
-    'email': 'john@example.com',
-    'address': '123 Main St'
-}
-data_ops.insert_user_data(user_data)
-
-# Retrieve user data
-user = data_ops.get_user_data(1)
-
-# Log audit event
-db.log_audit_event(
-    user_id=1,
-    action='INSERT',
-    table_name='users',
-    record_id=1,
-    new_value=str(user_data)
-)
-```
-
-
