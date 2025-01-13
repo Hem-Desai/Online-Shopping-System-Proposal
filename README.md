@@ -382,16 +382,10 @@ python test_data.py
 ```
 online-shopping-system/
 ├── main.py              # Main application logic and OnlineShoppingSystem class
+├── models.py            # Database models
 ├── test_data.py         # Interactive menu system and test data
-├── security/
-│   ├── __init__.py
-│   ├── privacy.py       # DataPrivacyManager implementation
-│   ├── database.py      # SecureDatabase implementation
-│   ├── access.py        # DataAccessControl implementation
-│   └── operations.py    # SecureDataOperations implementation
-├── utils/
-│   ├── __init__.py
-│   └── logging.py       # Audit logging utilities
+├── security.py          # Security implementation
+├── database.py          # Database security implementation
 ├── encryption.key       # Encrypted key storage (generated on first run)
 └── requirements.txt     # Project dependencies
 ```
